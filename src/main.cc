@@ -95,21 +95,19 @@ int main(int argc, char** argv) {
         case 5: bench5(run_iters, strtol(argv[4], &end, 10), std::move(routing_table)); break;
 
         case 22: {
-            size_t min_packet_size = strtoul(argv[3], &end, 10);
-            size_t max_packet_size = strtoul(argv[4], &end, 10);
+            size_t min_packet_size = strtoul(argv[4], &end, 10);
+            size_t max_packet_size = strtoul(argv[5], &end, 10);
             tag_all2all_ucx(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
             break;
         }
         case 23: {
-            size_t min_packet_size = strtoul(argv[3], &end, 10);
-            size_t max_packet_size = strtoul(argv[4], &end, 10);
+            size_t min_packet_size = strtoul(argv[4], &end, 10);
+            size_t max_packet_size = strtoul(argv[5], &end, 10);
             rdma_all2all_ucx(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
             break;
         }
         case 24: {
-            size_t min_packet_size = strtoul(argv[3], &end, 10);
-            size_t max_packet_size = strtoul(argv[4], &end, 10);
-            rdma_circular_ucx(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
+            rdma_circular_ucx(comm, run_iters, std::move(routing_table));
             break;
         }
         default: cerr << "test number " << test_num << " does not exist\n";

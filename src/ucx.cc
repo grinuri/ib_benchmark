@@ -100,17 +100,38 @@ struct metadata {
     std::vector<ucp::registered_memory> local_mem;
 };
 
+template <class T>
+auto get_data(T& buff, std::enable_if_t<std::is_pod_v<T>>* = 0) {
+    return &buff;
+}
+
+template <class T>
+auto get_size(T& buff, std::enable_if_t<std::is_pod_v<T>>* = 0) {
+    return sizeof(buff);
+}
+
+template <class Buff>
+auto get_data(Buff& buff) -> decltype(buff.data()) {
+    return buff.data();
+}
+
+template <class Buff>
+auto get_size(Buff& buff) -> decltype(buff.size()) {
+    return buff.size();
+}
+
+
 template <class Buffers>
 metadata exchange_metadata(ucp::communicator& comm, const router::route& route, Buffers& buffs) {
     std::vector<ucp::registered_memory> registered_mem(comm.size());
     for (size_t rank : route) {
         registered_mem[rank] = comm.get_context().register_memory(
-            buffs[rank].data(), buffs[rank].size()
+            get_data(buffs[rank]), get_size(buffs[rank])
         );
     }
     if (!registered_mem[comm.rank()]) {
         registered_mem[comm.rank()] = comm.get_context().register_memory(
-            buffs[comm.rank()].data(), buffs[comm.rank()].size()
+            get_data(buffs[comm.rank()]), get_size(buffs[comm.rank()])
         );
     }
 
@@ -118,23 +139,20 @@ metadata exchange_metadata(ucp::communicator& comm, const router::route& route, 
     std::vector<ucp::rkey> remote_keys(comm.size());
 
     for (size_t rank : route) {
-        if (rank != comm.rank())
-            comm.async_obtain_memory(
-                rank, 
-                remote_mem[rank], 
-                remote_keys[rank], 
-                [](auto s, auto){ ucp::check(s); }
-            );
+        comm.async_obtain_memory(
+            rank, 
+            remote_mem[rank], 
+            remote_keys[rank], 
+            [](auto s, auto){ ucp::check(s); }
+        );
     }
 
     for (size_t rank : route) {
-        if (rank != comm.rank()) {
-            comm.async_expose_memory(
-                rank, 
-                registered_mem[rank], 
-                [](auto s, auto){ ucp::check(s); }
-            );
-        }
+        comm.async_expose_memory(
+            rank, 
+            registered_mem[rank], 
+            [](auto s, auto){ ucp::check(s); }
+        );
     }
     
     comm.run();
@@ -157,57 +175,60 @@ void rdma_all2all_ucx(
     std::vector<packet_t> to_send(comm.size());
     std::vector<packet_t> to_receive(comm.size(), packet_t(max_packet_size));
 
+    std::vector<uint64_t> atomics(comm.size());
+
     size_t sent_bytes = generate_data(
         comm, iterations, route, to_send, max_packet_size, max_packet_size
     );
     
-    // atomic, to wait on
-    for (int i : route) {
-        to_send[i].front() = 0;
-    }
 
+    std::cout << getpid() << " before ex1\n";
     auto[remote_mem, remote_keys, local_mem] = exchange_metadata(comm, route, to_receive);
+    std::cout << getpid() << " before ex2\n";
+    auto[remote_mem_atomics, remote_keys_atomics, local_mem_atomics] = exchange_metadata(comm, route, atomics);
+    std::cout << getpid() << " before ex3\n";
     
     NetStats stats; // start after data creation and key exchange overhead
     stats.update_sent(sent_bytes);
 
-    for (size_t i = 0; i < iterations; ++i) {
+    for (size_t i = 1; i <= iterations; ++i) {
         for (size_t rank : route) {
-            if (rank != comm.rank()) {
-                comm.async_put_memory(
-                    rank, 
-                    ucp::memory(to_send[rank]), 
-                    (uintptr_t)remote_mem[rank].address(), 
-                    remote_keys[rank],
-                    [](auto status, auto) { ucp::check(status); }
-                );
-            }
+            comm.async_put_memory(
+                rank, 
+                ucp::memory(to_send[rank]), 
+                (uintptr_t)remote_mem[rank].address(), 
+                remote_keys[rank],
+                [](auto status, auto) { ucp::check(status); }
+            );
         }
         comm.get_worker().fence();
 
         for (size_t rank : route) {
-            if (rank != comm.rank()) {
-                comm.atomic_post(
-                    rank, 
-                    UCP_ATOMIC_POST_OP_ADD, 
-                    1ll, 
-                    8, 
-                    (uintptr_t)remote_mem[rank].address(), 
-                    remote_keys[rank]
-                );
-            }
+//                std::cout << getpid() << " post " << rank << " i " << i << std::endl;
+            comm.atomic_post(
+                rank, 
+                UCP_ATOMIC_POST_OP_ADD, 
+                1, 
+                8, 
+                (uintptr_t)remote_mem_atomics[rank].address(), 
+                remote_keys_atomics[rank]
+            );
         }
-        comm.run();
-    }
+        comm.get_worker().fence();
+//        comm.run();
     
-    for (size_t rank : route) {
-        comm.run();
-        if (rank != comm.rank()) {
-            while (to_receive[rank].front() != 1) {
+        volatile uint64_t* atom = atomics.data();
+        for (size_t rank : route) {
+            comm.run();
+//                std::cout << getpid() << " wait " << rank << ":" << (int) to_receive[rank].front() << " vs " << i << std::endl;
+            while (atom[rank] < i) {
                 comm.run();
+//                std::cout << getpid() << " wait2 " << rank << ":" << atom[rank] << " vs " << i << std::endl;
+//                    sleep(1);
             }
         }
     }    
+    std::cout << getpid() << " 6\n";
     comm.get_worker().flush();
 
     stats.finish();
@@ -220,12 +241,12 @@ void rdma_all2all_ucx(
         << stats.upstream_bandwidth() / (1 << 30) << " GB/s" << std::endl;
 }
 
-
 void rdma_circular_ucx(
     ucp::communicator& comm, 
     size_t iterations, 
     router::routing_table routing_table
 ) {
+/*
     constexpr size_t buff_size = 10 * 1024 * 1024;
     constexpr size_t chunk_size = 32 * 1024;
 
@@ -284,4 +305,6 @@ void rdma_circular_ucx(
 
     std::cout << getpid() << " rank " << comm.rank() << " upstream bandwidth: "
         << stats.upstream_bandwidth() / (1 << 30) << " GB/s" << std::endl;
+*/
 }
+
