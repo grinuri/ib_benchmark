@@ -143,7 +143,7 @@ metadata exchange_metadata(ucp::communicator& comm, const router::route& route, 
             rank, 
             remote_mem[rank], 
             remote_keys[rank], 
-            [](auto s, auto){ ucp::check(s); }
+            ucp::checked_completion
         );
     }
 
@@ -151,9 +151,10 @@ metadata exchange_metadata(ucp::communicator& comm, const router::route& route, 
         comm.async_expose_memory(
             rank, 
             registered_mem[rank], 
-            [](auto s, auto){ ucp::check(s); }
+            ucp::checked_completion
         );
     }
+    comm.get_worker().fence();
     comm.get_worker().flush();
     comm.run();
     return {remote_mem, remote_keys, registered_mem};
@@ -195,7 +196,7 @@ void rdma_all2all_ucx(
                 ucp::memory(to_send[rank]), 
                 (uintptr_t)remote_mem[rank].address(), 
                 remote_keys[rank],
-                [](auto status, auto) { ucp::check(status); }
+                ucp::checked_completion
             );
         }
         comm.get_worker().fence();
@@ -273,7 +274,7 @@ void rdma_circular_ucx(
                 ucp::memory(to_send[rank], chunk_size), 
                 (uintptr_t)remote_mem[rank].address() + (chunk_size * chunk_number) % buff_size, 
                 remote_keys[rank],
-                [](auto status, auto) { ucp::check(status); }
+                ucp::checked_completion
             );
         }
         comm.get_worker().fence();
