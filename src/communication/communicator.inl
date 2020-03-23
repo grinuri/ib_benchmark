@@ -8,7 +8,7 @@
 
 #include <util/log.h>
 #include <util/serialization.h>
-#include <boost/serialization/vector.hpp>
+
 #include "communicator.h"
 
 namespace ib_bench {

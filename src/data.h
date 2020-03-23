@@ -3,16 +3,17 @@
 #include <boost/mpi/datatype.hpp>
 #include <boost/serialization/array.hpp>
 #include <cereal/types/array.hpp>
-#include <boost/serialization/vector.hpp>
+#include <shmem.h>
 
 namespace ib_bench {
 
 /// a packet containing compile-time array, id, and rank
 template<size_t Count, bool use_boost_serialization = true>
 struct ct_ints {
+    using value_type = unsigned int;
     size_t rank;
     int id;
-    std::array<unsigned int, Count> data;
+    std::array<value_type, Count> data;
 
     template <class Archive, bool boost = use_boost_serialization>
     std::enable_if_t<!boost> serialize(Archive& ar) {
@@ -29,18 +30,20 @@ struct ct_ints {
     }
 
     constexpr size_t size() const {
-        return sizeof(rank) + sizeof(id) + sizeof(data);
+        return sizeof(rank) + sizeof(id) + data.size() * sizeof(value_type);
     }
 };
 
 ///
 
 /// a packet containing run-time array, id, and rank
-template<bool=true>
+template<bool=true, template <class> class Allocator = std::allocator>
 struct rt_ints {
+    using value_type = unsigned int;
+
     size_t rank;
     int id;
-    std::vector<unsigned int> data;
+    std::vector<value_type, Allocator<value_type>> data;
 
     template <class Archive>
     void serialize(Archive& ar, unsigned int) {
@@ -50,10 +53,64 @@ struct rt_ints {
     }
 
     size_t size() const {
-        return sizeof(rank) + sizeof(id) + data.size();
+        return sizeof(rank) + sizeof(id) + data.size() * sizeof(value_type);
     }
 };
 
+template <class T>
+struct shmem_allocator {
+    using value_type = T;
+
+    shmem_allocator() = default;
+
+    template <class U>
+    constexpr shmem_allocator(const shmem_allocator<U>&) noexcept
+    { }
+
+    [[nodiscard]] T* allocate(std::size_t n) {
+        if (n > std::size_t(-1) / sizeof(T)) {
+            throw std::bad_alloc();
+        }
+        if (auto p = static_cast<T*>(shmem_malloc(n * sizeof(T)))) {
+            return p;
+        }
+        throw std::bad_alloc();
+    }
+
+    void deallocate(T* p, std::size_t) noexcept {
+        shmem_free(p);
+    }
+};
+
+template <class T, class U>
+bool operator==(const shmem_allocator<T>&, const shmem_allocator<U>&) {
+    return true;
+}
+template <class T, class U>
+bool operator!=(const shmem_allocator<T>&, const shmem_allocator<U>&) {
+    return false;
+}
+
+struct shmem_rt_ints {
+    using value_type = unsigned int;
+    // [0]: rank
+    // [1]: id
+    std::vector<value_type, shmem_allocator<value_type>> data;
+
+    size_t size() const {
+        return data.size() * sizeof(value_type);
+    }
+
+    int rank() const {
+        assert(data.size() > 2);
+        return data[0];
+    }
+
+    int id() const {
+        assert(data.size() > 2);
+        return data[1];
+    }
+};
 
 template <class T>
 struct generator {
@@ -109,6 +166,37 @@ struct generator<rt_ints<use_boost_serialization>> {
     }
 
 private:
+    size_t m_rank;
+    mutable int m_id;
+    size_t m_size;
+};
+
+template <>
+struct generator<shmem_rt_ints> {
+    using result_type = shmem_rt_ints;
+    generator(size_t rank, size_t size) : m_rank(rank), m_id(0), m_size(size)
+    { }
+    result_type operator()() const {
+        result_type result;
+        prepare_data(result);
+        std::generate(begin(result.data) + 2, end(result.data), std::rand);
+        return result;
+    }
+
+    result_type operator()(unsigned int n) const {
+        result_type result;
+        prepare_data(result);
+        std::fill(begin(result.data) + 2, end(result.data), n);
+        return result;
+    }
+
+private:
+    void prepare_data(result_type& result) const {
+        result.data.resize(m_size + 2);
+        result.data[0] = m_rank;
+        result.data[1] = ++m_id;
+    }
+
     size_t m_rank;
     mutable int m_id;
     size_t m_size;

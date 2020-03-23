@@ -26,11 +26,11 @@ struct NetStats {
         m_bytes_sent += num_bytes;
     }
 
-    double upstream_bandwidth() const {
+    uint64_t upstream_bandwidth() const {
         return (double)(m_bytes_sent) / m_timer.elapsed_seconds();
     }
 
-    double downstream_bandwidth() const {
+    uint64_t downstream_bandwidth() const {
         return (double)(m_bytes_received) / m_timer.elapsed_seconds();
     }
 

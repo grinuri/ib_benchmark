@@ -1,10 +1,16 @@
 #include <boost/serialization/array.hpp>
+#include <boost/serialization/vector.hpp>
 #include <cereal/types/array.hpp>
+
 #include "data.h"
 #include "router.h"
 #include "channel_runner.h"
 #include "all_to_all_gap_runner.h"
+#include "all_to_all_gap_runner_shmem.h"
 #include "bench2.h"
+#include "ucx.h"
+#include <communicator.h>
+
 
 using namespace ib_bench;
 
@@ -30,9 +36,18 @@ void bench0(
     }.run();
 }
 
-void bench1(size_t run_iters, int max_gap,router::routing_table routing_table, size_t int_count) {
-    std::cout << "Iterations: " << run_iters << " packet size " << int_count << " ints " << " max gap " << max_gap << std::endl;
-    all_to_all_gap_runner<1024>{run_iters, max_gap, std::move(routing_table), int_count}.run();
+void bench1(size_t run_iters, int max_gap,router::routing_table routing_table, size_t byte_count) {
+    all_to_all_gap_runner runner{run_iters, max_gap, std::move(routing_table), byte_count};
+    runner.run();
+}
+
+void bench5(size_t run_iters, int max_gap,router::routing_table routing_table) {
+    all_to_all_gap_runner<(1024 * 8)> runner{run_iters, max_gap, std::move(routing_table)};
+    runner.run();
+}
+
+void bench4(size_t run_iters, int max_gap,router::routing_table routing_table, size_t byte_count) {
+    all_to_all_gap_runner_shmem{run_iters, max_gap, std::move(routing_table), byte_count}.run();
 }
 
 int main(int argc, char** argv) {
@@ -42,6 +57,8 @@ int main(int argc, char** argv) {
         cerr << "  or ./test 1 run_iterations routing_table_file max_gap packet_size\n";
         cerr << "  or ./test 2 run_iterations routing_table_file packet_size\n";
         cerr << "  or ./test 3 run_iterations min_packet_size max_packet_size\n";
+        cerr << "  or (like 1, but shmem) ./test 4 run_iterations routing_table_file max_gap packet_size\n";
+        cerr << "  or ./test 5 run_iterations routing_table_file max_gap\n";
         return -1;
     }
     char *end = nullptr;
@@ -54,6 +71,15 @@ int main(int argc, char** argv) {
         routing_table_name = argv[3];
         routing_table = load_routing_table(routing_table_name);
     }
+    namespace mpi = boost::mpi;
+    mpi::environment env;
+    mpi::communicator mpi_comm;
+
+    size_t world_size = 4;
+    auto var = std::getenv("OMPI_COMM_WORLD_SIZE");
+    
+    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size) :
+        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size);
 
     switch (test_num) {
         case 0: bench0(run_iters, strtoul(argv[4], &end, 10), strtoul(argv[5], &end, 10), std::move(routing_table)); break;
@@ -63,6 +89,27 @@ int main(int argc, char** argv) {
             size_t min_packet_size = strtoul(argv[3], &end, 10);
             size_t max_packet_size = strtoul(argv[4], &end, 10);
             bench2(run_iters, min_packet_size, max_packet_size);
+            break;
+        }
+        case 4: bench4(run_iters, strtol(argv[4], &end, 10), std::move(routing_table), strtoul(argv[5], &end, 10)); break;
+        case 5: bench5(run_iters, strtol(argv[4], &end, 10), std::move(routing_table)); break;
+
+        case 22: {
+            size_t min_packet_size = strtoul(argv[3], &end, 10);
+            size_t max_packet_size = strtoul(argv[4], &end, 10);
+            tag_all2all_ucx(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
+            break;
+        }
+        case 23: {
+            size_t min_packet_size = strtoul(argv[3], &end, 10);
+            size_t max_packet_size = strtoul(argv[4], &end, 10);
+            rdma_all2all_ucx(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
+            break;
+        }
+        case 24: {
+            size_t min_packet_size = strtoul(argv[3], &end, 10);
+            size_t max_packet_size = strtoul(argv[4], &end, 10);
+            rdma_circular_ucx(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
             break;
         }
         default: cerr << "test number " << test_num << " does not exist\n";

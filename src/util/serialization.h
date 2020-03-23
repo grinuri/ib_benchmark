@@ -3,7 +3,7 @@
 #include <sstream>
 #include <tuple>
 #include <variant>
-#include <boost/filesystem/path.hpp>
+#include <filesystem>
 
 #include <boost/hana/for_each.hpp>
 #include <boost/hana/ext/std/tuple.hpp>
@@ -45,7 +45,7 @@ namespace cereal {
 
 
 namespace util {
-    namespace fs = boost::filesystem;
+    namespace fs = std::filesystem;
     template <class T>
     void serialize(T&& value, std::ostream& os) {
         cereal::BinaryOutputArchive(os) << std::forward<T>(value);

@@ -56,7 +56,7 @@ struct channel_runner {
     // send random data of types that correspond to the channels
     void send_random(size_t dest) {
         auto per_channel = [=]<size_t... Is>(std::index_sequence<Is...>) {
-            (..., this->send_random_to_channel<Is, ChannelTypes>(dest));
+            (..., send_random_to_channel<Is, ChannelTypes>(dest));
         };
         per_channel(std::index_sequence_for<ChannelTypes...>{});
     }
@@ -75,7 +75,7 @@ struct channel_runner {
 
     void receive() {
         auto per_channel = [=]<size_t... Is>(std::index_sequence<Is...>) {
-            (..., this->receive_channel<Is, ChannelTypes>());
+            (..., receive_channel<Is, ChannelTypes>());
         };
         per_channel(std::index_sequence_for<ChannelTypes...>{});
     }
