@@ -29,7 +29,7 @@ router::route router::operator()() const {
         pos == m_routing_table.end() && m_default_routing == to_all
     ) {
         result.reserve(m_comm_size - 1);
-        for (rank_type dest = (m_rank + 1) % m_comm_size; dest < m_rank; dest = (dest + 1) % m_comm_size) {
+        for (rank_type dest = (m_rank + 1) % m_comm_size; dest != m_rank; dest = (dest + 1) % m_comm_size) {
             if (dest != m_rank) {
                 result.push_back(dest);
             }
