@@ -154,7 +154,7 @@ metadata exchange_metadata(ucp::communicator& comm, const router::route& route, 
             [](auto s, auto){ ucp::check(s); }
         );
     }
-    
+    comm.get_worker().flush();
     comm.run();
     return {remote_mem, remote_keys, registered_mem};
 }
@@ -182,11 +182,8 @@ void rdma_all2all_ucx(
     );
     
 
-    std::cout << getpid() << " before ex1\n";
     auto[remote_mem, remote_keys, local_mem] = exchange_metadata(comm, route, to_receive);
-    std::cout << getpid() << " before ex2\n";
     auto[remote_mem_atomics, remote_keys_atomics, local_mem_atomics] = exchange_metadata(comm, route, atomics);
-    std::cout << getpid() << " before ex3\n";
     
     NetStats stats; // start after data creation and key exchange overhead
     stats.update_sent(sent_bytes);
@@ -228,7 +225,6 @@ void rdma_all2all_ucx(
             }
         }
     }    
-    std::cout << getpid() << " 6\n";
     comm.get_worker().flush();
 
     stats.finish();
