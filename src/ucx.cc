@@ -51,20 +51,21 @@ size_t generate_data(
         to_send[i] = generate_packet(buff_size_min, buff_size_max);
         total_bytes += iterations * to_send[i].size();
     }
-    if (to_send[comm.rank()].size() == 0) {
-        to_send[comm.rank()] = generate_packet(buff_size_min, buff_size_max);
-    }
+//    if (to_send[comm.rank()].size() == 0) {
+//        to_send[comm.rank()] = generate_packet(buff_size_min, buff_size_max);
+//    }
     return total_bytes;
 }
 
 }
 
-void tag_all2all_ucx(
+void tag_all2all(
     ucp::communicator& comm, 
     size_t iterations, 
     router::routing_table routing_table, 
     size_t min_packet_size, 
-    size_t max_packet_size
+    size_t max_packet_size,
+    bool variable
 ) {
     boost::mpi::environment env;
     boost::mpi::communicator world;
@@ -78,11 +79,17 @@ void tag_all2all_ucx(
         comm, iterations, route, in_packets, max_packet_size, max_packet_size
     );
 
+    if (!variable) {
+        for (auto& pack : out_packets) {
+            pack.resize(max_packet_size);
+        }
+    }
+
     NetStats stats; // start after data creation overhead
     stats.update_sent(sent_bytes);
 
     for (size_t i = 0; i < iterations; ++i) {
-        comm.all_to_all(in_packets, out_packets, 0);
+        comm.all_to_all(in_packets, out_packets, 0, variable);
     }
 
     stats.finish();
@@ -91,7 +98,27 @@ void tag_all2all_ucx(
         << stats.bytes_sent() / (1 << 20) << " MB" << std::endl;
 
     std::cout << "rank " << world.rank() << " upstream bandwidth: "
-        << stats.upstream_bandwidth() / (1 << 20) << " MB/s" << std::endl;
+        << stats.upstream_bandwidth() * 8 / (1 << 30) << " GBit/s" << std::endl;
+}
+
+void tag_all2all_variable(
+    ucp::communicator& comm, 
+    size_t iterations, 
+    router::routing_table routing_table, 
+    size_t min_packet_size, 
+    size_t max_packet_size
+) {
+    tag_all2all(comm, iterations, routing_table, min_packet_size, max_packet_size, true);
+}
+
+void tag_all2all_fixed(
+    ucp::communicator& comm, 
+    size_t iterations, 
+    router::routing_table routing_table, 
+    size_t min_packet_size, 
+    size_t max_packet_size
+) {
+    tag_all2all(comm, iterations, routing_table, min_packet_size, max_packet_size, false);
 }
 
 struct metadata {
@@ -185,9 +212,14 @@ void rdma_all2all_ucx(
 
     auto[remote_mem, remote_keys, local_mem] = exchange_metadata(comm, route, to_receive);
     auto[remote_mem_atomics, remote_keys_atomics, local_mem_atomics] = exchange_metadata(comm, route, atomics);
+
+    for (size_t rank : route) {
+        std::cout << getpid() << "route " << rank << std::endl;
+    }    
     
     NetStats stats; // start after data creation and key exchange overhead
     stats.update_sent(sent_bytes);
+
 
     for (size_t i = 1; i <= iterations; ++i) {
         for (size_t rank : route) {
@@ -202,7 +234,6 @@ void rdma_all2all_ucx(
         comm.get_worker().fence();
 
         for (size_t rank : route) {
-//                std::cout << getpid() << " post " << rank << " i " << i << std::endl;
             comm.atomic_post(
                 rank, 
                 UCP_ATOMIC_POST_OP_ADD, 
@@ -213,20 +244,16 @@ void rdma_all2all_ucx(
             );
         }
         comm.get_worker().fence();
-//        comm.run();
-    
-        volatile uint64_t* atom = atomics.data();
-        for (size_t rank : route) {
-            comm.run();
-//                std::cout << getpid() << " wait " << rank << ":" << (int) to_receive[rank].front() << " vs " << i << std::endl;
-            while (atom[rank] < i) {
-                comm.run();
-//                std::cout << getpid() << " wait2 " << rank << ":" << atom[rank] << " vs " << i << std::endl;
-//                    sleep(1);
-            }
-        }
+        comm.run();
     }    
     comm.get_worker().flush();
+
+    for (size_t rank : route) {
+        comm.run();
+        while (atomics[rank] < iterations) {
+            comm.run();
+        }
+    }
 
     stats.finish();
     
@@ -235,7 +262,7 @@ void rdma_all2all_ucx(
         << stats.seconds_passed() << std::endl;
 
     std::cout << getpid() << " rank " << comm.rank() << " upstream bandwidth: "
-        << stats.upstream_bandwidth() / (1 << 30) << " GB/s" << std::endl;
+        << stats.upstream_bandwidth() * 8 / (1 << 30) << " GBit/s" << std::endl;
 }
 
 void rdma_circular_ucx(

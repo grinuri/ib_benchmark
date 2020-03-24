@@ -94,10 +94,16 @@ int main(int argc, char** argv) {
         case 4: bench4(run_iters, strtol(argv[4], &end, 10), std::move(routing_table), strtoul(argv[5], &end, 10)); break;
         case 5: bench5(run_iters, strtol(argv[4], &end, 10), std::move(routing_table)); break;
 
+        case 21: {
+            size_t min_packet_size = strtoul(argv[4], &end, 10);
+            size_t max_packet_size = strtoul(argv[5], &end, 10);
+            tag_all2all_variable(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
+            break;
+        }
         case 22: {
             size_t min_packet_size = strtoul(argv[4], &end, 10);
             size_t max_packet_size = strtoul(argv[5], &end, 10);
-            tag_all2all_ucx(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
+            tag_all2all_fixed(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
             break;
         }
         case 23: {
