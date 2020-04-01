@@ -5,6 +5,7 @@
 #include "data.h"
 #include "router.h"
 #include "channel_runner.h"
+#include "ucx_channel_runner.h"
 #include "all_to_all_gap_runner.h"
 #include "all_to_all_gap_runner_shmem.h"
 #include "bench2.h"
@@ -28,6 +29,30 @@ void bench0(
         ct_ints<1024>,
         ct_ints<2048>
     >{
+        run_iters,
+        flush_size,
+        sync_iters,
+        {1, 2, 3, 2, 1, 0},
+        std::move(routing_table)
+    }.run();
+}
+
+void bench0_ucx(
+    const ucp::communicator& comm,
+    size_t run_iters,
+    size_t flush_size,
+    size_t sync_iters,
+    router::routing_table routing_table
+) {
+    return ucx_channel_runner<
+        ct_ints<2>,
+        ct_ints<8>,
+        ct_ints<16>,
+        ct_ints<64>,
+        ct_ints<1024>,
+        ct_ints<2048>
+    >{
+        comm,
         run_iters,
         flush_size,
         sync_iters,
@@ -116,6 +141,7 @@ int main(int argc, char** argv) {
             rdma_circular_ucx(comm, run_iters, std::move(routing_table));
             break;
         }
+        case 25: bench0_ucx(comm, run_iters, strtoul(argv[4], &end, 10), strtoul(argv[5], &end, 10), std::move(routing_table)); break;
         default: cerr << "test number " << test_num << " does not exist\n";
     }
     return 0;
