@@ -50,6 +50,7 @@ struct ucx_channel_runner {
         for (size_t i = 0; i < 1 + m_channel_priorities[PORT]; ++i) {
             auto data = generator<T>(m_comm.rank())();
             m_stats.update_sent(data.size());
+//            std::cout << " send random " << m_comm.rank() << "->" << dest << std::endl;
             m_comm.template send<PORT>(std::move(data), dest);
         }
     }
@@ -89,6 +90,9 @@ struct ucx_channel_runner {
         auto send = [&]() {
             for (size_t iters = 0; iters < m_iters_to_run; ++iters) {
                 auto route = m_router();
+                for (auto d : route) {
+                    //std::cout << m_comm.rank() << "==>" << d << std::endl;
+                }
                 boost::for_each(route, [this](auto dest) { send_random(dest); });
                 if (iters % m_iters_to_sync == 0) {
                     sync();

@@ -40,7 +40,7 @@ void UCXBackend::validate_frontend_type(const std::string& type_name) {
 }
 
 ucp::request UCXBackend::new_recv_request() {
-    return m_world.async_receive(m_recv_buff, 0);
+    return m_world.async_receive(m_recv_buff, m_world.rank());
 }
 
 void UCXBackend::clear_send_requests() {
@@ -62,7 +62,7 @@ void UCXBackend::flush_one_buffer(size_t buffer_num) {
     if (m_send_buffers[buffer_num].size() == 0) {
         return;
     }
-    auto req = m_world.async_send(buffer_num, std::move(m_send_buffers[buffer_num]), 0);
+    auto req = m_world.async_send(buffer_num, std::move(m_send_buffers[buffer_num]), buffer_num);
     if (req.in_progress()) {
         m_send_reqs.push(req);
     }

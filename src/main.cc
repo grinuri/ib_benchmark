@@ -103,8 +103,8 @@ int main(int argc, char** argv) {
     size_t world_size = 4;
     auto var = std::getenv("OMPI_COMM_WORLD_SIZE");
     
-    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size) :
-        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size);
+    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size, true) :
+        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size, true);
 
     switch (test_num) {
         case 0: bench0(run_iters, strtoul(argv[4], &end, 10), strtoul(argv[5], &end, 10), std::move(routing_table)); break;
