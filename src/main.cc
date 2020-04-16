@@ -97,14 +97,17 @@ int main(int argc, char** argv) {
         routing_table = load_routing_table(routing_table_name);
     }
     namespace mpi = boost::mpi;
-    mpi::environment env;
-    mpi::communicator mpi_comm;
 
-    size_t world_size = 4;
+    size_t world_size = 2;
     auto var = std::getenv("OMPI_COMM_WORLD_SIZE");
-    
-    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size, true) :
-        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size, true);
+    if (var) {
+      static mpi::environment env;
+      static mpi::communicator mpi_comm;
+      world_size = mpi_comm.size();
+    }
+
+    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size, false) :
+        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size, false);
 
     switch (test_num) {
         case 0: bench0(run_iters, strtoul(argv[4], &end, 10), strtoul(argv[5], &end, 10), std::move(routing_table)); break;
@@ -142,6 +145,11 @@ int main(int argc, char** argv) {
             break;
         }
         case 25: bench0_ucx(comm, run_iters, strtoul(argv[4], &end, 10), strtoul(argv[5], &end, 10), std::move(routing_table)); break;
+        case 26: {
+            size_t packet_size = strtoul(argv[4], &end, 10);
+            send_0_to_1_ucx(comm, run_iters, packet_size);
+            break;
+        }
         default: cerr << "test number " << test_num << " does not exist\n";
     }
     return 0;

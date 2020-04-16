@@ -187,6 +187,43 @@ metadata exchange_metadata(ucp::communicator& comm, const router::route& route, 
     return {remote_mem, remote_keys, registered_mem};
 }
 
+void send_0_to_1_ucx(
+    ucp::communicator& comm, 
+    size_t iterations, 
+    size_t packet_size 
+) {
+    if (comm.size() != 2) {
+        throw std::runtime_error("This test requires world size == 2");
+    }
+    std::vector<char> to_send = generate_packet(packet_size, packet_size);
+    std::vector<char> to_receive(packet_size);
+    size_t sent_bytes = packet_size * iterations;
+    
+    NetStats stats; // start after data creation overhead
+    stats.update_sent(sent_bytes);
+
+    size_t iter = 0;
+    if (comm.rank() == 0) {
+        while (iter++ < iterations) {
+            comm.async_send(1, to_send, 1);
+            comm.run();
+        }
+    } else if (comm.rank() == 1) {
+        while (iter++ < iterations) {
+            comm.async_receive(to_receive, 1);
+            comm.run();
+        }
+    }
+
+    stats.finish();
+
+    std::cout << "rank " << comm.rank() << " sent total of : "
+        << stats.bytes_sent() / (1 << 20) << " MB" << std::endl;
+
+    std::cout << "rank " << comm.rank() << " upstream bandwidth: "
+        << stats.upstream_bandwidth() * 8 / 1000000000 << " GBit/s" << std::endl;
+}
+
 void rdma_all2all_ucx(
     ucp::communicator& comm, 
     size_t iterations, 

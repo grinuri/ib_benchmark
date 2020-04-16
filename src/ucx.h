@@ -31,3 +31,9 @@ void rdma_circular_ucx(
     size_t iterations, 
     ib_bench::router::routing_table routing_table
 );
+
+void send_0_to_1_ucx(
+    ucp::communicator& comm, 
+    size_t iterations, 
+    size_t packet_size 
+);
