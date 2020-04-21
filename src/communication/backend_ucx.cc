@@ -8,8 +8,8 @@ UCXBackend::UCXBackend(const ucp::communicator& comm, size_t flush_size) :
     m_world(comm),
     m_recv_req(new_recv_request()),
     m_send_buffers(size()),
-    m_flush_size(flush_size) {
-}
+    m_flush_size(flush_size)
+{ }
 
 UCXBackend::~UCXBackend() {
     // Sync all nodes before closing
@@ -40,7 +40,14 @@ void UCXBackend::validate_frontend_type(const std::string& type_name) {
 }
 
 ucp::request UCXBackend::new_recv_request() {
-    return m_world.async_receive(m_recv_buff, m_world.rank());
+    m_arrived_size = m_world.get_worker().get_pending_size(m_world.rank());
+    if (m_arrived_size) {
+//        std::cout << getpid() << " probe rank " << m_world.rank() << " size " << m_arrived_size << std::endl;
+        m_recv_buff.clear();
+        m_recv_buff.push_back(std::string(m_arrived_size, 0));
+        return m_world.async_receive(m_recv_buff[0], m_world.rank());
+    }
+    return ucp::request();
 }
 
 void UCXBackend::clear_send_requests() {
@@ -62,9 +69,13 @@ void UCXBackend::flush_one_buffer(size_t buffer_num) {
     if (m_send_buffers[buffer_num].size() == 0) {
         return;
     }
-    auto req = m_world.async_send(buffer_num, std::move(m_send_buffers[buffer_num]), buffer_num);
-    if (req.in_progress()) {
-        m_send_reqs.push(req);
+    for (const auto& buf : m_send_buffers[buffer_num]) {
+//        std::cout << getpid() << " send to tag " << buffer_num << " size " << buf.size() << std::endl;
+        auto req = m_world.async_send(buffer_num, buf, buffer_num);
+        m_world.get_context().poll();
+        if (req.in_progress()) {
+            m_send_reqs.push(std::move(req));
+        }
     }
     m_send_buffers[buffer_num].clear();
     clear_send_requests();
@@ -82,12 +93,18 @@ bool UCXBackend::done_sending() {
     return m_send_reqs.empty();
 }
 
-auto UCXBackend::try_receive() -> std::optional<std::vector<msg_t>> {
+std::optional<std::vector<UCXBackend::msg_t>> UCXBackend::try_receive() {
+    m_world.get_context().poll();
+    if (!m_recv_req.is_ptr()) {
+        m_recv_req = new_recv_request();
+        return std::nullopt;
+    }
     auto got_recv = !m_recv_req.in_progress();
     if (!got_recv) {
         return std::nullopt;
     }
     auto rv = std::move(m_recv_buff);
+    m_arrived_size = 0;
     m_recv_req = new_recv_request();
     return rv;
 }

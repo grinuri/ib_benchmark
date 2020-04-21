@@ -106,8 +106,8 @@ int main(int argc, char** argv) {
       world_size = mpi_comm.size();
     }
 
-    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size, false) :
-        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size, false);
+    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size, true) :
+        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size, true);
 
     switch (test_num) {
         case 0: bench0(run_iters, strtoul(argv[4], &end, 10), strtoul(argv[5], &end, 10), std::move(routing_table)); break;

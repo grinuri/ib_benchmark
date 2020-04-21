@@ -299,7 +299,7 @@ void rdma_all2all_ucx(
         << stats.seconds_passed() << std::endl;
 
     std::cout << getpid() << " rank " << comm.rank() << " upstream bandwidth: "
-        << stats.upstream_bandwidth() * 8 / (1 << 30) << " GBit/s" << std::endl;
+        << stats.upstream_bandwidth() * 8 / 1000000000 << " GBit/s" << std::endl;
 }
 
 void rdma_circular_ucx(

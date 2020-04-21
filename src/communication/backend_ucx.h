@@ -67,6 +67,7 @@ private:
     void clear_send_requests();
 
     ucp::communicator m_world;
+    size_t m_arrived_size;
     std::vector<msg_t> m_recv_buff;
     ucp::request m_recv_req;
     std::queue<ucp::request> m_send_reqs;

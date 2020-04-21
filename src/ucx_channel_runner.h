@@ -93,9 +93,13 @@ struct ucx_channel_runner {
                 for (auto d : route) {
                     //std::cout << m_comm.rank() << "==>" << d << std::endl;
                 }
+//                std::cout << getpid() << " before send rand\n";
                 boost::for_each(route, [this](auto dest) { send_random(dest); });
+//                std::cout << getpid() << " after send rand\n";
                 if (iters % m_iters_to_sync == 0) {
+//                    std::cout << getpid() << " before sync\n";
                     sync();
+//                    std::cout << getpid() << " after sync\n";
                 }
             }
             mark_eof();
@@ -118,8 +122,8 @@ struct ucx_channel_runner {
         m_stopped = true;
         m_stats.finish();
         receiver.join();
-        std::cout << "Rank " << m_comm.rank() << " sent " << (m_stats.bytes_sent() / 1024) <<
-            " KB " << m_stats.seconds_passed() << " sec " << (m_stats.upstream_bandwidth() / 1024 / 1024) << " MB/s" << std::endl;
+        std::cout << "Rank " << m_comm.rank() << " sent " << (m_stats.bytes_sent() / 1024 / 1024) <<
+            " MB " << m_stats.seconds_passed() << " sec " << (m_stats.upstream_bandwidth() * 8 / (1 << 30)) << " Gbit/s" << std::endl;
     }
 
 private:
