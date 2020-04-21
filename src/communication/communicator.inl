@@ -175,7 +175,6 @@ void SRCommunicator<Backend, ChannelTypes...>::increment_ack_counter(
 ) {
     if (++m_ack_counters[chan_num] == size()) {
         std::unique_lock l(m_sync_mutex);
-//        std::cout << getpid() << " m_synchronized = true\n";
         m_synchronized = true;
         m_sync_cond.notify_all();
         VALIDATE(m_sync_counters[chan_num] >= size(),
@@ -211,16 +210,13 @@ void SRCommunicator<Backend, ChannelTypes...>::poll_and_handle_send_queues() {
             backend_msg.push_back(chan_id);
 
             if (msg->msg_type == MsgType::data) {
-                //std::cout << getpid() << " send " << (int)msg->msg_type << " to " << msg->dest << std::endl;
                 m_backend->send(std::move(backend_msg), msg->dest);
             } else { // EOF, sync or ACK messages
-                //std::cout << getpid() << " broadcast " << (int)msg->msg_type << std::endl;
                 m_backend->broadcast(std::move(backend_msg));
                 // We empty the backend's buffers when sending these messages
                 m_backend->flush_send_buffers();
             }
             if (msg->msg_type == MsgType::eof) {
-                //std::cout << getpid() << " EOF! " << (int)msg->msg_type << std::endl;
                 BENCH_LOG_DEBUG(boost::format(
                                    "[%d] Sending EOF on channel %s")
                                    % rank() % chan_id);

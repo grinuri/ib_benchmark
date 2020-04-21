@@ -90,16 +90,12 @@ struct ucx_channel_runner {
         auto send = [&]() {
             for (size_t iters = 0; iters < m_iters_to_run; ++iters) {
                 auto route = m_router();
-                for (auto d : route) {
+                //for (auto d : route) {
                     //std::cout << m_comm.rank() << "==>" << d << std::endl;
-                }
-//                std::cout << getpid() << " before send rand\n";
+                //}
                 boost::for_each(route, [this](auto dest) { send_random(dest); });
-//                std::cout << getpid() << " after send rand\n";
                 if (iters % m_iters_to_sync == 0) {
-//                    std::cout << getpid() << " before sync\n";
                     sync();
-//                    std::cout << getpid() << " after sync\n";
                 }
             }
             mark_eof();

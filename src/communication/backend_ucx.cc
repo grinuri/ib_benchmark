@@ -42,7 +42,6 @@ void UCXBackend::validate_frontend_type(const std::string& type_name) {
 ucp::request UCXBackend::new_recv_request() {
     m_arrived_size = m_world.get_worker().get_pending_size(m_world.rank());
     if (m_arrived_size) {
-//        std::cout << getpid() << " probe rank " << m_world.rank() << " size " << m_arrived_size << std::endl;
         m_recv_buff.clear();
         m_recv_buff.push_back(std::string(m_arrived_size, 0));
         return m_world.async_receive(m_recv_buff[0], m_world.rank());
@@ -70,7 +69,6 @@ void UCXBackend::flush_one_buffer(size_t buffer_num) {
         return;
     }
     for (const auto& buf : m_send_buffers[buffer_num]) {
-//        std::cout << getpid() << " send to tag " << buffer_num << " size " << buf.size() << std::endl;
         auto req = m_world.async_send(buffer_num, buf, buffer_num);
         m_world.get_context().poll();
         if (req.in_progress()) {
