@@ -24,7 +24,7 @@ public:
     using msg_t = std::string;
 
     /// flush_size - max size of send buffer per remote host
-    UCXBackend(const ucp::communicator& comm, size_t flush_size = 1000);
+    UCXBackend(ucp::communicator& comm, size_t flush_size = 1000);
     ~UCXBackend();
     UCXBackend(UCXBackend&&) = default;
 
@@ -66,13 +66,14 @@ private:
      */
     void clear_send_requests();
 
-    ucp::communicator m_world;
+    ucp::communicator& m_world;
     size_t m_arrived_size;
     std::vector<msg_t> m_recv_buff;
     ucp::request m_recv_req;
     std::queue<ucp::request> m_send_reqs;
-    std::vector<std::vector<std::string>> m_send_buffers;
+    std::vector<std::shared_ptr<std::vector<msg_t>>> m_send_buffers;
     size_t m_flush_size;
+    size_t m_pending_send = 0;
 };
 
 } // namespace ib_bench

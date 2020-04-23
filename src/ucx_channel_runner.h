@@ -20,7 +20,7 @@ struct ucx_channel_runner {
     using channel_priorities = std::array<size_t, sizeof...(ChannelTypes)>;
 
     ucx_channel_runner(
-        const ucp::communicator& comm,
+        ucp::communicator& comm,
         size_t iters_to_run,
         size_t flush_size,
         size_t iters_to_sync,
@@ -44,11 +44,13 @@ struct ucx_channel_runner {
         per_channel(std::index_sequence_for<ChannelTypes...>{});
     }
 
+    int m_packet_id = 0;
     // send random data to a single channel
     template <size_t PORT, typename T>
     void send_random_to_channel(size_t dest) {
         for (size_t i = 0; i < 1 + m_channel_priorities[PORT]; ++i) {
             auto data = generator<T>(m_comm.rank())();
+            data.data[0] = ++m_packet_id;
             m_stats.update_sent(data.size());
 //            std::cout << " send random " << m_comm.rank() << "->" << dest << std::endl;
             m_comm.template send<PORT>(std::move(data), dest);
@@ -89,6 +91,7 @@ struct ucx_channel_runner {
         m_stopped = false;
         auto send = [&]() {
             for (size_t iters = 0; iters < m_iters_to_run; ++iters) {
+                //std::cout << getpid() << " Iter: " << iters << std::endl;
                 auto route = m_router();
                 //for (auto d : route) {
                     //std::cout << m_comm.rank() << "==>" << d << std::endl;

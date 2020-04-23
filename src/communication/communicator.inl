@@ -1,5 +1,5 @@
 #include <chrono>
-
+#include <iomanip>
 #include <boost/format.hpp>
 
 #include <util/validate.h>
@@ -197,6 +197,15 @@ void SRCommunicator<Backend, ChannelTypes...>::handle_sync_ack_messages(
     }
 }
 
+std::string to_hex(const std::string& str) {
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    std::cout << getpid() << " converting " << str.size() << std::endl;
+    for (uint8_t c : str) {
+        ss << std::setw(2) << (int)c << '.';
+    }
+    return ss.str();
+}
 
 template <class Backend, class ...ChannelTypes>
 void SRCommunicator<Backend, ChannelTypes...>::poll_and_handle_send_queues() {
@@ -232,7 +241,7 @@ void SRCommunicator<Backend, ChannelTypes...>::poll_and_handle_recv_backend() {
     auto opt_recv_vector = m_backend->try_receive();
     if (opt_recv_vector) {
         for (auto&& backend_msg : *opt_recv_vector) {
-              // Packet structure: {data, msg_type, channel_id}
+            // Packet structure: {data, msg_type, channel_id}
             uint8_t chan_id = backend_msg.back();
             backend_msg.pop_back();
             MsgType msg_type = static_cast<MsgType>(backend_msg.back());
@@ -242,8 +251,7 @@ void SRCommunicator<Backend, ChannelTypes...>::poll_and_handle_recv_backend() {
             } else if (msg_type == MsgType::sync || msg_type == MsgType::ack) {
                 m_recv_queues[chan_id].push(msg_type);
             } else {
-                VALIDATE(msg_type == MsgType::data,
-                    "Fatal error in communicator!");
+                VALIDATE(msg_type == MsgType::data, "Fatal error in communicator!");
                 m_recv_queues[chan_id].push(std::move(backend_msg));
             }
         }

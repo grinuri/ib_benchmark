@@ -38,7 +38,7 @@ void bench0(
 }
 
 void bench0_ucx(
-    const ucp::communicator& comm,
+    ucp::communicator& comm,
     size_t run_iters,
     size_t flush_size,
     size_t sync_iters,
