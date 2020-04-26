@@ -202,6 +202,59 @@ private:
     size_t m_size;
 };
 
+// copy&paste
+struct ucx_rt_ints {
+    using value_type = unsigned int;
+    // [0]: rank
+    // [1]: id
+    std::vector<value_type> data;
+
+    size_t size() const {
+        return data.size() * sizeof(value_type);
+    }
+
+    int rank() const {
+        assert(data.size() > 2);
+        return data[0];
+    }
+
+    int id() const {
+        assert(data.size() > 2);
+        return data[1];
+    }
+};
+
+template <>
+struct generator<ucx_rt_ints> {
+    using result_type = ucx_rt_ints;
+    generator(size_t rank, size_t size) : m_rank(rank), m_id(0), m_size(size)
+    { }
+    result_type operator()() const {
+        result_type result;
+        prepare_data(result);
+        std::generate(begin(result.data) + 2, end(result.data), std::rand);
+        return result;
+    }
+
+    result_type operator()(unsigned int n) const {
+        result_type result;
+        prepare_data(result);
+        std::fill(begin(result.data) + 2, end(result.data), n);
+        return result;
+    }
+
+private:
+    void prepare_data(result_type& result) const {
+        result.data.resize(m_size + 2);
+        result.data[0] = m_rank;
+        result.data[1] = ++m_id;
+    }
+
+    size_t m_rank;
+    mutable int m_id;
+    size_t m_size;
+};
+
 }
 
 namespace boost::mpi {

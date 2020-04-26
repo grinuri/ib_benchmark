@@ -86,6 +86,7 @@ struct ucx_channel_runner {
 
     void run() {
         using namespace ib_bench;
+        std::cout << "m_iters_to_sync " << m_iters_to_sync << " m_iters_to_run " << m_iters_to_run << std::endl;
         std::thread main_loop([this] { m_comm.run(); });
 
         m_stopped = false;
@@ -122,7 +123,7 @@ struct ucx_channel_runner {
         m_stats.finish();
         receiver.join();
         std::cout << "Rank " << m_comm.rank() << " sent " << (m_stats.bytes_sent() / 1024 / 1024) <<
-            " MB " << m_stats.seconds_passed() << " sec " << (m_stats.upstream_bandwidth() * 8 / (1 << 30)) << " Gbit/s" << std::endl;
+            " MB " << m_stats.seconds_passed() << " sec " << (m_stats.upstream_bandwidth() * 8 / (1 << 20)) << " Mbit/s" << std::endl;
     }
 
 private:

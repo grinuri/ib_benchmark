@@ -8,6 +8,7 @@
 #include "ucx_channel_runner.h"
 #include "all_to_all_gap_runner.h"
 #include "all_to_all_gap_runner_shmem.h"
+#include "ucx_2side_gap_runner.h"
 #include "bench2.h"
 #include "ucx.h"
 #include <communicator.h>
@@ -45,18 +46,13 @@ void bench0_ucx(
     router::routing_table routing_table
 ) {
     return ucx_channel_runner<
-        ct_ints<2>,
-        ct_ints<8>,
-        ct_ints<16>,
-        ct_ints<64>,
-        ct_ints<1024>,
-        ct_ints<2048>
+        ct_ints<262144>
     >{
         comm,
         run_iters,
         flush_size,
         sync_iters,
-        {1, 2, 3, 2, 1, 0},
+        {1},
         std::move(routing_table)
     }.run();
 }
@@ -148,6 +144,11 @@ int main(int argc, char** argv) {
         case 26: {
             size_t packet_size = strtoul(argv[4], &end, 10);
             send_0_to_1_ucx(comm, run_iters, packet_size);
+            break;
+        }
+        case 27: {
+            tag_gap_runner<> runner{comm, run_iters, strtoul(argv[4], &end, 10), std::move(routing_table), strtoul(argv[5], &end, 10)};
+            runner.run();
             break;
         }
         default: cerr << "test number " << test_num << " does not exist\n";
