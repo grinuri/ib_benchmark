@@ -242,6 +242,11 @@ struct generator<ucx_rt_ints> {
         std::fill(begin(result.data) + 2, end(result.data), n);
         return result;
     }
+    
+    void set_meta(result_type& result) {
+        result.data[0] = m_rank;
+        result.data[1] = ++m_id;
+    }
 
 private:
     void prepare_data(result_type& result) const {

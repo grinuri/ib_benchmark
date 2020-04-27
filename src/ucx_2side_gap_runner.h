@@ -70,7 +70,8 @@ private:
         m_router((size_t)m_comm.size(), (size_t)m_comm.rank(), std::move(routing_table)),
         m_packet_size(packet_size),
         m_received(comm.size()),
-        m_sent(max_gap + 1)
+        m_sent(max_gap + 1),
+        m_route(m_router())
     {
         std::cout << "Iterations: " << m_iters_to_run << " packet size " <<
             m_packet_size << " bytes " << " max gap " << m_max_gap << std::endl;
@@ -82,21 +83,24 @@ private:
             // TODO: don't do +2 hardcoded
             buf.data.resize(m_packet_size + 2);
         }
+        for (auto& buf : m_sent) {
+            // TODO: don't do +2 hardcoded
+            buf.data.resize(m_packet_size + 2);
+        }
     }
 
     bool may_send(const data_type& packet) {
         return (packet.id() - m_latest_complete) <= (m_max_gap + 1);
     }
 
-    void test_sent() {
+    void wait_for_send() {
         while (m_pending_send > 0) {
             m_comm.get_context().poll();
         }
     }
 
     void send_to_peers(const data_type& packet) {
-        auto route = m_router();
-        for (int dest : route) {
+        for (int dest : m_route) {
             m_stats.update_sent(packet.size());
             ++m_pending_send;
             // tag is sender rank
@@ -104,14 +108,13 @@ private:
                 dest, 
                 boost::asio::const_buffer(packet.data.data(), packet.size()), 
                 m_comm.rank(), 
-                [this](auto, auto) { --m_pending_send; }
+                [this](auto status, auto) { ucp::check(status), --m_pending_send; }
             );
         }
     }
 
     void receive_from_peers() {
-        auto route = m_router();
-        for (int source : route) {
+        for (int source : m_route) {
             // tag is sender rank
             m_comm.async_receive(
                 boost::asio::buffer(m_received[source].data.data(), m_received[source].size()), 
@@ -151,26 +154,21 @@ private:
         auto generator = make_generator(m_comm.rank(), m_packet_size);
 
         for (size_t iters = 0; iters < m_iters_to_run; ++iters) {
-            m_sent[m_sent_free_index] = generator();
+            auto& to_send = m_sent[m_sent_free_index];
+            // to speed up, just set meta, no need in actual data
+            generator.set_meta(to_send);
+            //m_sent[m_sent_free_index] = generator();
             bool sent = false;
             while (!sent) {
                 m_comm.get_context().poll();
-                if (may_send(m_sent[m_sent_free_index])) {
-                    send_to_peers(m_sent[m_sent_free_index]);
+                if (may_send(to_send)) {
+                    send_to_peers(to_send);
                     sent = true;
+                    receive_from_peers();
                 }
-                receive_from_peers();
-                test_sent();
             }
             m_comm.get_context().poll();
         }
-        // ensure that we receive every send from every peer
-        size_t expected_total_receives = m_iters_to_run * (m_comm.size() - 1);
-        while (m_receives < expected_total_receives) {
-            test_sent();
-            receive_from_peers();
-        }
-        // ensure all the send requests are complete
         m_comm.run();
     }
 
@@ -188,6 +186,7 @@ private:
     std::vector<data_type> m_received;
     std::vector<data_type> m_sent;
     size_t m_sent_free_index = 0;
+    router::route m_route;
 };
 
 }
