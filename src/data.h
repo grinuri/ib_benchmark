@@ -205,23 +205,36 @@ private:
 // copy&paste
 struct ucx_rt_ints {
     using value_type = unsigned int;
-    // [0]: rank
-    // [1]: id
-    std::vector<value_type> data;
 
     size_t size() const {
-        return data.size() * sizeof(value_type);
+        return m_data.size() * sizeof(value_type);
     }
 
     int rank() const {
         assert(data.size() > 2);
-        return data[0];
+        return m_data[0];
     }
 
     int id() const {
         assert(data.size() > 2);
-        return data[1];
+        return m_data[1];
     }
+    
+    auto& container() {
+        return m_data;
+    }
+    auto& container() const {
+        return m_data;
+    }
+    
+    auto data() {
+        return m_data.data();
+    }
+
+private:
+    // [0]: rank
+    // [1]: id
+    std::vector<value_type> m_data;
 };
 
 template <>
@@ -232,27 +245,27 @@ struct generator<ucx_rt_ints> {
     result_type operator()() const {
         result_type result;
         prepare_data(result);
-        std::generate(begin(result.data) + 2, end(result.data), std::rand);
+        std::generate(begin(result.container()) + 2, end(result.container()), std::rand);
         return result;
     }
 
     result_type operator()(unsigned int n) const {
         result_type result;
         prepare_data(result);
-        std::fill(begin(result.data) + 2, end(result.data), n);
+        std::fill(begin(result.container()) + 2, end(result.container()), n);
         return result;
     }
     
     void set_meta(result_type& result) {
-        result.data[0] = m_rank;
-        result.data[1] = ++m_id;
+        result.container()[0] = m_rank;
+        result.container()[1] = ++m_id;
     }
 
 private:
     void prepare_data(result_type& result) const {
-        result.data.resize(m_size + 2);
-        result.data[0] = m_rank;
-        result.data[1] = ++m_id;
+        result.container().resize(m_size + 2);
+        result.container()[0] = m_rank;
+        result.container()[1] = ++m_id;
     }
 
     size_t m_rank;

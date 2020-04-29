@@ -9,6 +9,7 @@
 #include "all_to_all_gap_runner.h"
 #include "all_to_all_gap_runner_shmem.h"
 #include "ucx_2side_gap_runner.h"
+#include "ucx_1side_gap_runner.h"
 #include "bench2.h"
 #include "ucx.h"
 #include <communicator.h>
@@ -102,8 +103,8 @@ int main(int argc, char** argv) {
       world_size = mpi_comm.size();
     }
 
-    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size, true) :
-        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size, true);
+    auto comm = var ? ucp::create_world<ucp::oob::mpi::connector>(world_size, false) :
+        ucp::create_world<ucp::oob::tcp_ip::connector>(world_size, false);
 
     switch (test_num) {
         case 0: bench0(run_iters, strtoul(argv[4], &end, 10), strtoul(argv[5], &end, 10), std::move(routing_table)); break;
@@ -151,8 +152,14 @@ int main(int argc, char** argv) {
             runner.run();
             break;
         }
+        case 28: {
+            rdma_gap_runner<> runner{comm, run_iters, strtoul(argv[4], &end, 10), std::move(routing_table), strtoul(argv[5], &end, 10)};
+            runner.run();
+            break;
+        }
         default: cerr << "test number " << test_num << " does not exist\n";
     }
+    comm.close();
     return 0;
 }
 
