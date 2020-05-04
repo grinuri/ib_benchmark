@@ -39,7 +39,7 @@ void bench0(
     }.run();
 }
 
-void bench0_ucx(
+void gellers_communicator_ucx(
     ucp::communicator& comm,
     size_t run_iters,
     size_t flush_size,
@@ -126,22 +126,29 @@ int main(int argc, char** argv) {
             break;
         }
         case 22: {
-            size_t min_packet_size = strtoul(argv[4], &end, 10);
-            size_t max_packet_size = strtoul(argv[5], &end, 10);
-            tag_all2all_fixed(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
+            size_t packet_size = strtoul(argv[4], &end, 10);
+            tag_all2all_fixed(comm, run_iters, std::move(routing_table), packet_size);
             break;
         }
         case 23: {
-            size_t min_packet_size = strtoul(argv[4], &end, 10);
-            size_t max_packet_size = strtoul(argv[5], &end, 10);
-            rdma_all2all_ucx(comm, run_iters, std::move(routing_table), min_packet_size, max_packet_size);
+            size_t packet_size = strtoul(argv[4], &end, 10);
+            rdma_all2all_ucx(comm, run_iters, std::move(routing_table), packet_size);
             break;
         }
         case 24: {
-            rdma_circular_ucx(comm, run_iters, std::move(routing_table));
+            size_t packet_size = strtoul(argv[4], &end, 10);
+            rdma_circular_ucx(comm, run_iters, std::move(routing_table), packet_size);
             break;
         }
-        case 25: bench0_ucx(comm, run_iters, strtoul(argv[4], &end, 10), strtoul(argv[5], &end, 10), std::move(routing_table)); break;
+        case 25: 
+            gellers_communicator_ucx(
+                comm, 
+                run_iters, 
+                strtoul(argv[4], &end, 10), 
+                strtoul(argv[5], &end, 10), 
+                std::move(routing_table)
+            ); 
+            break;
         case 26: {
             size_t packet_size = strtoul(argv[4], &end, 10);
             send_0_to_1_ucx(comm, run_iters, packet_size);

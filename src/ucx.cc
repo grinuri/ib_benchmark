@@ -118,16 +118,20 @@ void tag_all2all_fixed(
     ucp::communicator& comm, 
     size_t iterations, 
     router::routing_table routing_table, 
-    size_t min_packet_size, 
-    size_t max_packet_size
+    size_t packet_size
 ) {
-    tag_all2all(comm, iterations, routing_table, min_packet_size, max_packet_size, false);
+    std::cout << "World size " << comm.size() << " test: send 0 to 1, packet_size " << 
+        (packet_size << 1024) << " KB, iterations " << iterations << std::endl;
+    tag_all2all(comm, iterations, routing_table, packet_size, packet_size, false);
 }
 void send_0_to_1_ucx(
     ucp::communicator& comm, 
     size_t iterations, 
     size_t packet_size 
 ) {
+    std::cout << "World size " << comm.size() << " test: send 0 to 1, packet_size " << 
+        (packet_size << 1024) << " KB, iterations " << iterations << std::endl;
+    
     if (comm.size() != 2) {
         throw std::runtime_error("This test requires world size == 2");
     }
@@ -164,8 +168,7 @@ void rdma_all2all_ucx(
     ucp::communicator& comm, 
     size_t iterations, 
     router::routing_table routing_table, 
-    size_t min_packet_size, 
-    size_t max_packet_size
+    size_t packet_size
 ) {
     boost::mpi::environment e;
     boost::mpi::communicator w;
@@ -174,22 +177,18 @@ void rdma_all2all_ucx(
     auto route = router();
 
     std::vector<packet_t> to_send(comm.size());
-    std::vector<packet_t> to_receive(comm.size(), packet_t(max_packet_size));
+    std::vector<packet_t> to_receive(comm.size(), packet_t(packet_size));
 
     std::vector<uint64_t> atomics(comm.size());
 
     size_t sent_bytes = generate_data(
-        comm, iterations, route, to_send, max_packet_size, max_packet_size
+        comm, iterations, route, to_send, packet_size, packet_size
     );
     
 
     auto[remote_mem, remote_keys, local_mem] = exchange_metadata(comm, route, to_receive);
     auto[remote_mem_atomics, remote_keys_atomics, local_mem_atomics] = exchange_metadata(comm, route, atomics);
 
-    for (size_t rank : route) {
-        std::cout << getpid() << "route " << rank << std::endl;
-    }    
-    
     NetStats stats; // start after data creation and key exchange overhead
     stats.update_sent(sent_bytes);
 
@@ -241,20 +240,25 @@ void rdma_all2all_ucx(
 void rdma_circular_ucx(
     ucp::communicator& comm, 
     size_t iterations, 
-    router::routing_table routing_table
+    router::routing_table routing_table,
+    size_t chunk_size
 ) {
-    constexpr size_t buff_size = 10 * 1024 * 1024;
-    constexpr size_t chunk_size = 32 * 1024;
+    constexpr size_t BUFF_SIZE = 10 * 1024 * 1024;
+
+    size_t total_iters = (BUFF_SIZE / chunk_size) * iterations;
+    
+    std::cout << "World size " << comm.size() << " test: 1-side circular, buffer size " << 
+        (BUFF_SIZE / 1024) << " KB, chunk size " << (chunk_size / 1024) << " KB, iterations " << iterations << std::endl;
 
     // send same data to all
-    std::vector<char> send_area(buff_size + 2 * sizeof(uint64_t));
+    std::vector<char> send_area(BUFF_SIZE + 2 * sizeof(uint64_t));
     // buffer per peer
-    std::vector<std::vector<char>> receive_areas(comm.size(), std::vector<char>(buff_size + 2 * sizeof(uint64_t)));
+    std::vector<std::vector<char>> receive_areas(comm.size(), std::vector<char>(BUFF_SIZE + 2 * sizeof(uint64_t)));
 
     router router(comm.size(), comm.rank(), std::move(routing_table));
     auto route = router();
     
-    size_t sent_bytes = iterations * buff_size * comm.size();
+    size_t sent_bytes = iterations * BUFF_SIZE * comm.size();
     
     std::vector<circular_adapter> to_send(comm.size(), circular_adapter(send_area));
     std::vector<circular_adapter> to_receive;
@@ -265,7 +269,7 @@ void rdma_circular_ucx(
         [](auto& area) { return circular_adapter(area); }
     );
 
-    auto[remote_mem, remote_keys, local_mem] = exchange_metadata(comm, route, to_receive);
+    auto [remote_mem, remote_keys, local_mem] = exchange_metadata(comm, route, to_receive);
     std::vector<circular_adapter> remote_circulars;
     std:transform(
         begin(remote_mem),
@@ -275,12 +279,6 @@ void rdma_circular_ucx(
     );
 
     size_t chunk_number = 0;
-
-    size_t total_iters = (buff_size / chunk_size) * iterations;
-    
-    std::stringstream ss;
-    ss << "Sending chunks of " << chunk_size << " bytes, " << (buff_size / chunk_size) << " iters per buffer "; 
-    std::cout << ss.str() << std::endl;
     
     NetStats stats; // start after data creation and key exchange overhead
     stats.update_sent(sent_bytes);
@@ -290,7 +288,7 @@ void rdma_circular_ucx(
             comm.async_put_memory(
                 rank, 
                 ucp::memory(to_send[rank].data_area(), chunk_size), 
-                (uintptr_t)remote_circulars[rank].data_area() + (chunk_size * chunk_number) % buff_size, 
+                (uintptr_t)remote_circulars[rank].data_area() + (chunk_size * chunk_number) % BUFF_SIZE, 
                 remote_keys[rank]
             );
         }

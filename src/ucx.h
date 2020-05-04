@@ -16,20 +16,19 @@ void tag_all2all_fixed(
     ucp::communicator& comm, 
     size_t iterations, 
     ib_bench::router::routing_table routing_table, 
-    size_t min_packet_size, 
-    size_t max_packet_size
+    size_t packet_size
 );
 void rdma_all2all_ucx(
     ucp::communicator& comm, 
     size_t iterations, 
     ib_bench::router::routing_table routing_table, 
-    size_t min_packet_size, 
-    size_t max_packet_size
+    size_t packet_size
 );
 void rdma_circular_ucx(
     ucp::communicator& comm, 
     size_t iterations, 
-    ib_bench::router::routing_table routing_table
+    ib_bench::router::routing_table routing_table,
+    size_t chunk_size
 );
 
 void send_0_to_1_ucx(

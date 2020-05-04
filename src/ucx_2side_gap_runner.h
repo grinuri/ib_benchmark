@@ -74,8 +74,9 @@ private:
         m_sent(max_gap * comm.size()),
         m_route(m_router())
     {
-        std::cout << "Iterations: " << m_iters_to_run << " packet size " <<
-            m_packet_size << " bytes " << " max gap " << m_max_gap << std::endl;
+        std::cout << "World size " << m_comm.size() << " test: 2-side, with gap " << m_max_gap << " iterations " << m_iters_to_run << " packet size " <<
+            (m_packet_size / 1024) << " KB " << std::endl;
+        
         VALIDATE(
             m_router.is_complete(),
             "This test requires complete (all-to-all) routing table"
@@ -119,7 +120,7 @@ private:
                 [this, source, idx = m_received_free_index](auto status, auto) {
                     ucp::check(status);
                     auto id = m_received[source][idx].id();
-                    std::cout << getpid() << " received from tag " << source << ": " << id << " data " << m_received[source][idx].container()[2] << std::endl;
+                    //std::cout << getpid() << " received from tag " << source << ": " << id << " data " << m_received[source][idx].container()[2] << std::endl;
                     if (m_received_ids.find(id) == m_received_ids.end()) {
                         m_received_ids[id] = 0;
                     }

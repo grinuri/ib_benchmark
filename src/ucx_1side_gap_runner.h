@@ -72,8 +72,8 @@ private:
         m_atomics(comm.size()),
         m_route(m_router())
     {
-        std::cout << "Iterations: " << m_iters_to_run << " packet size " <<
-            m_packet_size << " bytes " << " max gap " << m_max_gap << std::endl;
+        std::cout << "World size " << m_comm.size() << " test: 1-side, with gap " << m_max_gap << " iterations " << m_iters_to_run << " packet size " <<
+            (m_packet_size / 1024) << " KB " << std::endl;
         VALIDATE(
             m_router.is_complete(),
             "This test requires complete (all-to-all) routing table"
