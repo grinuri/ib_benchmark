@@ -11,38 +11,67 @@ struct metadata {
     std::vector<ucp::registered_memory> local_mem;
 };
 
-template <class T>
-auto get_data(T& buff, std::enable_if_t<std::is_pod_v<T>>* = 0) {
-    return &buff;
-}
+template <class T, class Enable = void>
+struct data_getter {
+    data_getter(T& t) : m_t(t) { }
+    auto get_data() const {
+        return m_t.data();
+    }
+
+    auto get_size() const {
+        return m_t.size();
+    }
+
+private:
+    T& m_t;
+};
 
 template <class T>
-auto get_size(T& buff, std::enable_if_t<std::is_pod_v<T>>* = 0) {
-    return sizeof(buff);
-}
+struct data_getter<T, std::enable_if_t<std::is_pod_v<T>>> {
+    data_getter(T& t) : m_t(t) { }
+    auto get_data() const {
+        return &m_t;
+    }
 
-template <class Buff>
-auto get_data(Buff& buff) -> decltype(buff.data()) {
-    return buff.data();
-}
+    auto get_size() const {
+        return sizeof(m_t);
+    }
 
-template <class Buff>
-auto get_size(Buff& buff) -> decltype(buff.size()) {
-    return buff.size();
-}
+private:
+    T& m_t;
+};
+
+template <class T, class U>
+struct data_getter<std::pair<T, U>> {
+    data_getter(std::pair<T, U>& t) : m_t(t) { }
+    auto get_data() const {
+        std::cout << " pair getter data " << &m_t << std::endl;
+        return &m_t;
+    }
+
+    auto get_size() const {
+        std::cout << " pair getter size " << sizeof(m_t) << std::endl;
+        return sizeof(m_t);
+    }
+    
+private:
+    std::pair<T, U>& m_t;
+};
 
 
 template <class Buffers>
 metadata exchange_metadata(ucp::communicator& comm, const router::route& route, Buffers& buffs) {
     std::vector<ucp::registered_memory> registered_mem(comm.size());
     for (size_t rank : route) {
+        data_getter getter(buffs[rank]);
         registered_mem[rank] = comm.get_context().register_memory(
-            get_data(buffs[rank]), get_size(buffs[rank])
+            getter.get_data(), getter.get_size()
         );
     }
     if (!registered_mem[comm.rank()]) {
+        data_getter getter{buffs[comm.rank()]};
         registered_mem[comm.rank()] = comm.get_context().register_memory(
-            get_data(buffs[comm.rank()]), get_size(buffs[comm.rank()])
+            getter.get_data(), getter.get_size()
         );
     }
 

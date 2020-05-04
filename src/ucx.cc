@@ -17,6 +17,7 @@
 #include <communicator.h>
 #include "ucx.h"
 #include "exchange_metadata.h"
+#include "data.h"
 
 
 using namespace ib_bench;
@@ -242,65 +243,88 @@ void rdma_circular_ucx(
     size_t iterations, 
     router::routing_table routing_table
 ) {
-/*
     constexpr size_t buff_size = 10 * 1024 * 1024;
     constexpr size_t chunk_size = 32 * 1024;
 
-    std::vector<packet_t> to_send(comm.size());
-    std::vector<packet_t> to_receive(comm.size(), packet_t(buff_size));
-    std::vector<std::pair<uint64_t, uint64_t>> pointers(comm.size());
+    // send same data to all
+    std::vector<char> send_area(buff_size + 2 * sizeof(uint64_t));
+    // buffer per peer
+    std::vector<std::vector<char>> receive_areas(comm.size(), std::vector<char>(buff_size + 2 * sizeof(uint64_t)));
 
     router router(comm.size(), comm.rank(), std::move(routing_table));
     auto route = router();
     
-    size_t sent_bytes = generate_data(
-        comm, iterations, route, to_send, chunk_size, chunk_size
+    size_t sent_bytes = iterations * buff_size * comm.size();
+    
+    std::vector<circular_adapter> to_send(comm.size(), circular_adapter(send_area));
+    std::vector<circular_adapter> to_receive;
+    std::transform(
+        begin(receive_areas), 
+        end(receive_areas), 
+        std::back_inserter(to_receive), 
+        [](auto& area) { return circular_adapter(area); }
     );
 
     auto[remote_mem, remote_keys, local_mem] = exchange_metadata(comm, route, to_receive);
-    auto[remote_ptrs, remote_ptrs_keys, local_ptrs] = 
-        exchange_metadata(comm, route, pointers);
-
-    NetStats stats; // start after data creation and key exchange overhead
-    stats.update_sent(sent_bytes);
+    std::vector<circular_adapter> remote_circulars;
+    std:transform(
+        begin(remote_mem),
+        end(remote_mem),
+        std::back_inserter(remote_circulars),
+        [](auto& mem) { return circular_adapter(static_cast<char*>(mem.address()), mem.size()); }        
+    );
 
     size_t chunk_number = 0;
 
-    while (chunk_number < (buff_size / chunk_size) * iterations) {
+    size_t total_iters = (buff_size / chunk_size) * iterations;
+    
+    std::stringstream ss;
+    ss << "Sending chunks of " << chunk_size << " bytes, " << (buff_size / chunk_size) << " iters per buffer "; 
+    std::cout << ss.str() << std::endl;
+    
+    NetStats stats; // start after data creation and key exchange overhead
+    stats.update_sent(sent_bytes);
+
+    while (chunk_number < total_iters) {
         for (size_t rank : route) {
             comm.async_put_memory(
                 rank, 
-                ucp::memory(to_send[rank], chunk_size), 
-                (uintptr_t)remote_mem[rank].address() + (chunk_size * chunk_number) % buff_size, 
-                remote_keys[rank],
-                ucp::checked_completion
+                ucp::memory(to_send[rank].data_area(), chunk_size), 
+                (uintptr_t)remote_circulars[rank].data_area() + (chunk_size * chunk_number) % buff_size, 
+                remote_keys[rank]
             );
         }
         comm.get_worker().fence();
-
         for (size_t rank : route) {
             comm.atomic_post(
                 rank, 
                 UCP_ATOMIC_POST_OP_ADD, 
-                1, 
+                chunk_size, 
                 8, 
-                (uintptr_t)remote_ptrs[rank].address(), 
-                remote_ptrs_keys[rank]
+                (uintptr_t)remote_circulars[rank].end_ptr(), 
+                remote_keys[rank]
             );
         }
         ++chunk_number;
-        comm.run();
+        comm.get_context().poll();
     }
     
     comm.get_worker().flush();
-
+    
+    for (auto rank : route) {
+        while (*to_receive[rank].end_ptr() < total_iters * chunk_size) {
+            //std::cout << getpid() << " rank " << rank << " " << to_receive[rank].begin() << " real " << *to_receive[rank].begin_ptr() << "," << to_receive[rank].end() << " real end " << *to_receive[rank].end_ptr() << std::endl;
+            //std::cout << getpid() << " other rank " << comm.rank() << " " << to_receive[comm.rank()].begin() << " real " << *to_receive[comm.rank()].begin_ptr() << "," << to_receive[comm.rank()].end() << std::endl;
+            comm.get_context().poll();
+        }
+    }
+    
     stats.finish();
     
     std::cout << getpid() << " rank " << comm.rank() << " sent total of : "
         << stats.bytes_sent() / (1 << 30) << " GB" << " in  " << stats.seconds_passed() << std::endl;
 
     std::cout << getpid() << " rank " << comm.rank() << " upstream bandwidth: "
-        << stats.upstream_bandwidth() / (1 << 30) << " GB/s" << std::endl;
-*/
+        << stats.upstream_bandwidth() * 8 / 1000000000 << " Gbit/s" << std::endl;
 }
 

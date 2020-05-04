@@ -273,6 +273,65 @@ private:
     size_t m_size;
 };
 
+///
+
+struct circular_adapter {
+    circular_adapter(char* ptrs_and_data, size_t size) : 
+        m_ptrs_and_data(ptrs_and_data),
+        m_data(ptrs_and_data + 2 * sizeof(uint64_t)),
+        m_size(size),
+        m_data_size(size - 2 * sizeof(uint64_t))
+    { }
+    
+    template <class Container>
+    explicit circular_adapter(Container& container) : circular_adapter(container.data(), container.size())
+    { }
+    
+    auto data() const {
+        return m_ptrs_and_data;
+    }
+    size_t size() const {
+        return m_size;
+    }
+    
+    auto data_area() {
+        return m_data;
+    }
+    size_t capacity() const {
+        return m_data_size;
+    }
+
+    uint64_t* begin_ptr() const {
+        return reinterpret_cast<uint64_t *>(m_ptrs_and_data);
+    }
+    uint64_t begin() const {
+        return *begin_ptr() % capacity();
+    }
+    uint64_t* end_ptr() const {
+        return reinterpret_cast<uint64_t *>(m_ptrs_and_data + sizeof(uint64_t));
+    }
+    uint64_t end() const {
+        return *end_ptr() % capacity();
+    }
+    bool full() const {
+        return (end() + 1) % capacity() == begin();
+    }
+    bool empty() const {
+        return begin() == end();
+    }
+    
+private:
+    char* m_ptrs_and_data;
+    char* m_data;
+    size_t m_size;
+    size_t m_data_size;
+
+    static size_t calc_internal_size(size_t size) {
+        // 2 ptrs + data
+        return sizeof(uint64_t) * 2 + size;
+    }
+};
+
 }
 
 namespace boost::mpi {

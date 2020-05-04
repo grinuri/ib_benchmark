@@ -154,13 +154,12 @@ private:
             while (!may_send(to_send)) {
                 m_comm.get_context().poll();
             }
-            //std::cout << getpid() << " m_sent_free_index " << m_sent_free_index << std::endl;
-            //std::cout << getpid() << " m_received_free_index " << m_received_free_index << std::endl;
             send_to_peers(remote_mem, remote_keys, remote_mem_atomics, remote_keys_atomics, to_send);
             m_sent_free_index = (m_sent_free_index + 1) % m_sent.size();
             m_comm.get_context().poll();
         }
         m_comm.run();
+        // must wait for the active side to complete!
         wait_for_atomics();
     }
 
