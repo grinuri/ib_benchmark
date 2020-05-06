@@ -120,8 +120,8 @@ void tag_all2all_fixed(
     router::routing_table routing_table, 
     size_t packet_size
 ) {
-    std::cout << "World size " << comm.size() << " test: send 0 to 1, packet_size " << 
-        (packet_size << 1024) << " KB, iterations " << iterations << std::endl;
+    std::cout << "World size " << comm.size() << " test: 2-sided all to all, packet_size " << 
+        (packet_size / 1024) << " KB, iterations " << iterations << std::endl;
     tag_all2all(comm, iterations, routing_table, packet_size, packet_size, false);
 }
 void send_0_to_1_ucx(
@@ -130,7 +130,7 @@ void send_0_to_1_ucx(
     size_t packet_size 
 ) {
     std::cout << "World size " << comm.size() << " test: send 0 to 1, packet_size " << 
-        (packet_size << 1024) << " KB, iterations " << iterations << std::endl;
+        (packet_size / 1024) << " KB, iterations " << iterations << std::endl;
     
     if (comm.size() != 2) {
         throw std::runtime_error("This test requires world size == 2");
@@ -173,6 +173,8 @@ void rdma_all2all_ucx(
     boost::mpi::environment e;
     boost::mpi::communicator w;
 
+    std::cout << "World size " << comm.size() << " test: 1-sided all to all, packet_size " << 
+        (packet_size / 1024) << " KB, iterations " << iterations << std::endl;
     router router(comm.size(), comm.rank(), std::move(routing_table));
     auto route = router();
 
@@ -244,7 +246,9 @@ void rdma_circular_ucx(
     size_t chunk_size
 ) {
     constexpr size_t BUFF_SIZE = 10 * 1024 * 1024;
-
+    if (BUFF_SIZE % chunk_size != 0) {
+        throw std::runtime_error("Buffer size must be a multiple of chunk size");
+    }
     size_t total_iters = (BUFF_SIZE / chunk_size) * iterations;
     
     std::cout << "World size " << comm.size() << " test: 1-side circular, buffer size " << 
@@ -258,7 +262,7 @@ void rdma_circular_ucx(
     router router(comm.size(), comm.rank(), std::move(routing_table));
     auto route = router();
     
-    size_t sent_bytes = iterations * BUFF_SIZE * comm.size();
+    size_t sent_bytes = iterations * BUFF_SIZE * route.size();
     
     std::vector<circular_adapter> to_send(comm.size(), circular_adapter(send_area));
     std::vector<circular_adapter> to_receive;
