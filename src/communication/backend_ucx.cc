@@ -20,6 +20,7 @@ UCXBackend::UCXBackend(ucp::communicator& comm, size_t flush_size) :
 UCXBackend::~UCXBackend() {
     // Sync all nodes before closing
     flush_send_buffers();
+    m_world.get_worker().cancel_request(m_recv_req);
     BENCH_LOG_DEBUG("Communicator UCX backend waiting for all nodes to finish");
     m_world.barrier();
 }

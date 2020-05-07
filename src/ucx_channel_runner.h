@@ -1,6 +1,5 @@
 #pragma once
 #include <thread>
-#include <boost/mpi.hpp>
 #include <boost/range/algorithm/for_each.hpp>
 #include "communication/communicator.h"
 #include "communication/backend_ucx.h"
@@ -10,7 +9,6 @@
 #include "util/net_stats.h"
 
 namespace ib_bench {
-namespace mpi = boost::mpi;
 
 /// Async-sends all to all (or some to some, depending on the routing table),
 /// via independent channels
@@ -87,13 +85,12 @@ struct ucx_channel_runner {
     void run() {
         using namespace ib_bench;
         std::cout << "m_iters_to_sync " << m_iters_to_sync << " m_iters_to_run " << m_iters_to_run << std::endl;
-        std::thread main_loop([this] { m_comm.run(); });
 
         m_stopped = false;
         auto send = [&]() {
+            auto route = m_router();
             for (size_t iters = 0; iters < m_iters_to_run; ++iters) {
                 //std::cout << getpid() << " Iter: " << iters << std::endl;
-                auto route = m_router();
                 //for (auto d : route) {
                     //std::cout << m_comm.rank() << "==>" << d << std::endl;
                 //}
@@ -115,9 +112,8 @@ struct ucx_channel_runner {
 
         std::thread sender{send};
         std::thread receiver{receive};
-
+        m_comm.run();
         sender.join();
-        main_loop.join();
         // at this point the communicator is closed, stop the receiver
         m_stopped = true;
         m_stats.finish();
